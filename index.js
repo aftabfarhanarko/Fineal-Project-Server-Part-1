@@ -29,7 +29,15 @@ async function run() {
 
     //  All parcel API
     app.get("/parcel", async (req, res) => {
-      const result = await parcelCollection.find().toArray();
+      const query = {};
+
+      const { email } = req.query;
+
+      if (email) {
+        query.senderemail = email;
+      }
+
+      const result = await parcelCollection.find(query).toArray();
       res.status(200).json({
         message: "Your All Parcel",
         result,
@@ -46,19 +54,15 @@ async function run() {
       });
     });
 
-    app.delete("/parcel/:id", async (req,res) => {
-        const id = req.params.id;
-        const  query = {_id: new ObjectId(id)};
-        const result = await parcelCollection.deleteOne(query);
-        res.status(200).json({
-            message: "Item deleted successfully",
-            result
-        })
-    })
-
-
-
-
+    app.delete("/parcel/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await parcelCollection.deleteOne(query);
+      res.status(204).json({
+        message: "Item deleted successfully",
+        result,
+      });
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
