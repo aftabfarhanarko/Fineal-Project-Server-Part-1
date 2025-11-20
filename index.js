@@ -36,18 +36,31 @@ async function run() {
       if (email) {
         query.senderemail = email;
       }
+       const options = {sort: {creatAtime: -1}}
 
-      const result = await parcelCollection.find(query).toArray();
+      const result = await parcelCollection.find(query,options).toArray();
       res.status(200).json({
         message: "Your All Parcel",
         result,
       });
     });
+    // payment data
+    app.get("/parcel/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await parcelCollection.findOne(query);
+      res.status(201).json({
+        message:"This Parcel Payment Done",
+        result
+      })
+    })
 
     app.post("/parcel", async (req, res) => {
-      const data = req.body;
-
-      const result = await parcelCollection.insertOne(data);
+      const parcel = req.body;
+      // creat a parcel Time 
+      parcel.creatAtime= new Date();
+     
+      const result = await parcelCollection.insertOne(parcel);
       res.status(200).json({
         message: "Successfully Post Data Now",
         result,
