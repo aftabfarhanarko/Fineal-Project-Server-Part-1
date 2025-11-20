@@ -1,9 +1,13 @@
-import express, { response } from "express";
+import express from "express";
 import dotenv from "dotenv";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 // import bcrypt from "bcrypt";
 import cors from "cors";
 // import jwt from "jsonwebtoken";
+import Stripe from "stripe";
+const stripe = new Stripe(
+  "sk_test_51SVZp7RcrOc8OB2ZQcBugTRVfjsDt43FYXmIo6zJzA2iEFQZYiCdnbvV8oQ3YLlV51xJCbOf2YCO1S84ZTYiO60Z00PSAXF6fE"
+);
 dotenv.config();
 const app = express();
 const port = process.env.PORT;
@@ -22,7 +26,6 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
 
     const parcelDB = client.db("parcelDB");
     const parcelCollection = parcelDB.collection("allparcel");
@@ -36,30 +39,30 @@ async function run() {
       if (email) {
         query.senderemail = email;
       }
-       const options = {sort: {creatAtime: -1}}
+      const options = { sort: { creatAtime: -1 } };
 
-      const result = await parcelCollection.find(query,options).toArray();
+      const result = await parcelCollection.find(query, options).toArray();
       res.status(200).json({
         message: "Your All Parcel",
         result,
       });
     });
-    // payment data
+    // data
     app.get("/parcel/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
       const result = await parcelCollection.findOne(query);
       res.status(201).json({
-        message:"This Parcel Payment Done",
-        result
-      })
-    })
+        message: "This Parcel Payment Done",
+        result,
+      });
+    });
 
     app.post("/parcel", async (req, res) => {
       const parcel = req.body;
-      // creat a parcel Time 
-      parcel.creatAtime= new Date();
-     
+      // creat a parcel Time
+      parcel.creatAtime = new Date();
+
       const result = await parcelCollection.insertOne(parcel);
       res.status(200).json({
         message: "Successfully Post Data Now",
@@ -77,7 +80,37 @@ async function run() {
       });
     });
 
-    await client.db("admin").command({ ping: 1 });
+    // Payment Api
+    app.post("/checkout", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.totalCost) * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo.percilname,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        customer_email: paymentInfo.senderemail,
+        mode: "payment",
+        metadata: {
+          parcelid: paymentInfo.parcelid,
+        },
+        success_url: `${process.env.YOUR_DOMAIN}/dasbord/success`,
+        cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
+      });
+      console.log(session);
+
+      res.send({ url: session.url });
+    });
+
+
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
