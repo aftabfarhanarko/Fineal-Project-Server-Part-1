@@ -5,9 +5,7 @@ import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 import cors from "cors";
 // import jwt from "jsonwebtoken";
 import Stripe from "stripe";
-const stripe = new Stripe(
-  "sk_test_51SVZp7RcrOc8OB2ZQcBugTRVfjsDt43FYXmIo6zJzA2iEFQZYiCdnbvV8oQ3YLlV51xJCbOf2YCO1S84ZTYiO60Z00PSAXF6fE"
-);
+const stripe = new Stripe(process.env.PAYMENT_KEY);
 dotenv.config();
 const app = express();
 const port = process.env.PORT;
