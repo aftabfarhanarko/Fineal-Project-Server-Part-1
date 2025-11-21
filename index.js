@@ -3,12 +3,21 @@ import dotenv from "dotenv";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 // import bcrypt from "bcrypt";
 import cors from "cors";
+import crypto from "crypto";
 dotenv.config();
 // import jwt from "jsonwebtoken";
 import Stripe from "stripe";
 const stripe = new Stripe(process.env.PAYMENT_KEY);
 const app = express();
 const port = process.env.PORT;
+
+function generateTrackingId() {
+  const prefix = "PRCL";
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const random = crypto.randomBytes(4).toString("hex").toUpperCase();
+
+  return `${prefix}-${date}-${random}`;
+}
 
 app.use(express.json());
 app.use(cors());
@@ -98,12 +107,57 @@ async function run() {
         mode: "payment",
         metadata: {
           parcelid: paymentInfo?.parcelid,
+          percilname: paymentInfo?.percilname,
         },
         customer_email: paymentInfo?.senderemail,
         success_url: `${process.env.YOUR_DOMAIN}/dasbord/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
       });
       res.send({ url: session.url });
+    });
+
+    // updet Payment Data
+    app.patch("/success-payment", async (req, res) => {
+      const data = req.query.session_id;
+      const seccions = await stripe.checkout.sessions.retrieve(data);
+      if (seccions.payment_status) {
+        const id = seccions.metadata.parcelid;
+        const query = { _id: new ObjectId(id) };
+        const seter = {
+          $set: {
+            paymentStutas: "Paid",
+            trakingId: generateTrackingId(),
+          },
+        };
+
+        const result = await parcelCollection.updateOne(query, seter);
+
+        const paymentInfo = {
+          amount: seccions.amount_total / 100,
+          currency: seccions.currency,
+          customerEmail: seccions.customer_email,
+          parcelid: seccions.metadata.parcelid,
+          parcelName: seccions.metadata.percilname,
+          transactionId: seccions.payment_intent,
+          paymentStatus: seccions.payment_status,
+          paidAt: new Date(),
+          trakingId: seccions.trakingId,
+        };
+        console.log("New", paymentInfo);
+
+        if (seccions.payment_status === "Paid") {
+          const resultPayment = await paymentParcelCollection.insertOne(
+            paymentInfo
+          );
+          res.send({
+            success: true,
+            modifyParcel: result,
+            paymentInfo: resultPayment,
+          });
+        }
+      }
+
+      // console.log("Seccions Id", seccions);
     });
 
     //Old Payment Api
@@ -134,41 +188,6 @@ async function run() {
       });
 
       res.send({ url: session.url });
-    });
-
-    // updet Payment Data
-    app.patch("/success-payment", async (req, res) => {
-      const data = req.query.session_id;
-      const seccions = await stripe.checkout.sessions.retrieve(data);
-      if (seccions.payment_status) {
-        const id = seccions.metadata.parcelid;
-        const query = { _id: new ObjectId(id) };
-        const seter = {
-          $set: {
-            paymentStutas: "Paid",
-          },
-        };
-
-        const result = await parcelCollection.updateOne(query, seter);
-
-        const paymentInfo = {
-          amount: seccions.amount_total / 100,
-          currency: seccions.currency,
-          customerEmail: seccions.customer_email,
-          parcelid: seccions.metadata.parcelid,
-          parcelName: seccions.metadata.parcelName,
-          transactionId: seccions.payment_intent,
-          paymentStatus: seccions.payment_status,
-          paidAt: new Date(),
-          trakingId: ""
-        };
-
-        if (seccions.payment_status === "Paid") {
-         const resultPayment =   await paymentParcelCollection.insertOne(paymentInfo)
-         res.send({success: true, modifyParcel: result, paymentInfo:paymentInfo})
-        }
-      }
-      console.log("Seccions Id", seccions);
     });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
