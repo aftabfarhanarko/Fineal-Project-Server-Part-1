@@ -98,7 +98,7 @@ async function run() {
               currency: "USD",
               unit_amount: amount,
               product_data: {
-                name: `Please Pay For Parcel : ${paymentInfo?.percilname}`,
+                name: `Pay For Parcel  Name : ${paymentInfo?.percilname}`,
               },
             },
             quantity: 1,
@@ -119,19 +119,37 @@ async function run() {
     // updet Payment Data
     app.patch("/success-payment", async (req, res) => {
       const data = req.query.session_id;
+
       const seccions = await stripe.checkout.sessions.retrieve(data);
       if (seccions.payment_status) {
+         
+        const trakingId = generateTrackingId();
+
+        // No Repet Saved Database Chack 
+        const transactionId = seccions.payment_intent;
+        const query2 = {transactionId : transactionId};
+        const isExgisted = await paymentParcelCollection.findOne(query2);
+        if(isExgisted){
+          return res.send({
+            message:"Is Exgisted Payment Data",
+            transactionId,
+            trakingId:isExgisted.trakingId
+          })
+        }
+
+
         const id = seccions.metadata.parcelid;
         const query = { _id: new ObjectId(id) };
         const seter = {
           $set: {
             paymentStutas: "Paid",
-            trakingId: generateTrackingId(),
+            trakingId: trakingId,
           },
         };
-
         const result = await parcelCollection.updateOne(query, seter);
 
+
+        
         const paymentInfo = {
           amount: seccions.amount_total / 100,
           currency: seccions.currency,
@@ -141,24 +159,40 @@ async function run() {
           transactionId: seccions.payment_intent,
           paymentStatus: seccions.payment_status,
           paidAt: new Date(),
-          trakingId: seccions.trakingId,
+          trakingId:trakingId,
         };
-        console.log("New", paymentInfo);
+        // console.log("New", paymentInfo);
 
-        if (seccions.payment_status === "Paid") {
+        if (seccions.payment_status === "paid") {
           const resultPayment = await paymentParcelCollection.insertOne(
             paymentInfo
           );
           res.send({
-            success: true,
             modifyParcel: result,
             paymentInfo: resultPayment,
+            trakingId: trakingId,
+            transactionId:seccions.payment_intent,
+            success: true,
           });
         }
       }
 
-      // console.log("Seccions Id", seccions);
     });
+
+    // get payment data user
+    app.get("/payment", async (req, res) => {
+      const {email} = req.query;
+      const query = {}
+      if(email){
+        query.customerEmail === email
+      }
+
+      const data =  paymentParcelCollection.find(query);
+      const result = await data.toArray();
+      res.send(result);
+    })
+
+
 
     //Old Payment Api
     app.post("/checkout", async (req, res) => {
