@@ -3,10 +3,10 @@ import dotenv from "dotenv";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 // import bcrypt from "bcrypt";
 import cors from "cors";
+dotenv.config();
 // import jwt from "jsonwebtoken";
 import Stripe from "stripe";
 const stripe = new Stripe(process.env.PAYMENT_KEY);
-dotenv.config();
 const app = express();
 const port = process.env.PORT;
 
@@ -24,7 +24,6 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-
     const parcelDB = client.db("parcelDB");
     const parcelCollection = parcelDB.collection("allparcel");
 
@@ -78,10 +77,10 @@ async function run() {
       });
     });
 
-    // Payment Api
-    app.post("/checkout", async (req, res) => {
+    // New Payment
+    app.post("/payment-checkout", async (req, res) => {
       const paymentInfo = req.body;
-      const amount = parseInt(paymentInfo.totalCost) * 100;
+      const amount = paymentInfo?.totalCost * 100;
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
@@ -89,25 +88,49 @@ async function run() {
               currency: "USD",
               unit_amount: amount,
               product_data: {
-                name: paymentInfo.percilname,
+                name: `Please Pay For Parcel : ${paymentInfo?.percilname}`,
               },
             },
             quantity: 1,
           },
         ],
-        customer_email: paymentInfo.senderemail,
+        mode: "payment",
+        success_url: `${process.env.YOUR_DOMAIN}/dasbord/success`,
+        cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
+      });
+      res.send({ url: session.url });
+    });
+
+
+
+    //Old Payment Api
+    app.post("/checkout", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = paymentInfo?.totalCost * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "USD",
+              unit_amount: amount,
+              product_data: {
+                name: `Please Pay For : ${paymentInfo?.percilname}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        customer_email: paymentInfo?.senderemail,
         mode: "payment",
         metadata: {
-          parcelid: paymentInfo.parcelid,
+          parcelid: paymentInfo?.parcelid,
         },
         success_url: `${process.env.YOUR_DOMAIN}/dasbord/success`,
         cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
       });
-      console.log(session);
 
       res.send({ url: session.url });
     });
-
 
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
