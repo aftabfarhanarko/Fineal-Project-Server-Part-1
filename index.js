@@ -26,6 +26,7 @@ async function run() {
   try {
     const parcelDB = client.db("parcelDB");
     const parcelCollection = parcelDB.collection("allparcel");
+    const paymentParcelCollection = parcelDB.collection("paymentParcel");
 
     //  All parcel API
     app.get("/parcel", async (req, res) => {
@@ -95,13 +96,15 @@ async function run() {
           },
         ],
         mode: "payment",
-        success_url: `${process.env.YOUR_DOMAIN}/dasbord/success`,
+        metadata: {
+          parcelid: paymentInfo?.parcelid,
+        },
+        customer_email: paymentInfo?.senderemail,
+        success_url: `${process.env.YOUR_DOMAIN}/dasbord/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
       });
       res.send({ url: session.url });
     });
-
-
 
     //Old Payment Api
     app.post("/checkout", async (req, res) => {
@@ -124,6 +127,7 @@ async function run() {
         mode: "payment",
         metadata: {
           parcelid: paymentInfo?.parcelid,
+          parcelName: paymentInfo?.percilname,
         },
         success_url: `${process.env.YOUR_DOMAIN}/dasbord/success`,
         cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
@@ -132,6 +136,40 @@ async function run() {
       res.send({ url: session.url });
     });
 
+    // updet Payment Data
+    app.patch("/success-payment", async (req, res) => {
+      const data = req.query.session_id;
+      const seccions = await stripe.checkout.sessions.retrieve(data);
+      if (seccions.payment_status) {
+        const id = seccions.metadata.parcelid;
+        const query = { _id: new ObjectId(id) };
+        const seter = {
+          $set: {
+            paymentStutas: "Paid",
+          },
+        };
+
+        const result = await parcelCollection.updateOne(query, seter);
+
+        const paymentInfo = {
+          amount: seccions.amount_total / 100,
+          currency: seccions.currency,
+          customerEmail: seccions.customer_email,
+          parcelid: seccions.metadata.parcelid,
+          parcelName: seccions.metadata.parcelName,
+          transactionId: seccions.payment_intent,
+          paymentStatus: seccions.payment_status,
+          paidAt: new Date(),
+          trakingId: ""
+        };
+
+        if (seccions.payment_status === "Paid") {
+         const resultPayment =   await paymentParcelCollection.insertOne(paymentInfo)
+         res.send({success: true, modifyParcel: result, paymentInfo:paymentInfo})
+        }
+      }
+      console.log("Seccions Id", seccions);
+    });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
