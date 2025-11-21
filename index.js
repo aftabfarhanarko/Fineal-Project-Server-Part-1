@@ -3,8 +3,10 @@ import dotenv from "dotenv";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 // import bcrypt from "bcrypt";
 import cors from "cors";
+import admin from "firebase-admin";
 import crypto from "crypto";
 dotenv.config();
+const serviceAccount = "./firebase-adminSdk.json";
 // import jwt from "jsonwebtoken";
 import Stripe from "stripe";
 const stripe = new Stripe(process.env.PAYMENT_KEY);
@@ -21,6 +23,34 @@ function generateTrackingId() {
 
 app.use(express.json());
 app.use(cors());
+
+// Fb Verify
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+const vreifyFirebase = async (req, res, next) => {
+  const token = req.headers.authorization;
+  console.log(token);
+  if (!token) {
+    return res.status(401).send({
+      message: "Unauthorized Access",
+    });
+  }
+
+  try {
+    const itToken = token.split(" ")[1];
+    const verify = await admin.auth().verifyIdToken(itToken);
+
+    req.verify_email = verify?.email;
+    next();
+  } catch (err) {
+    return res.status(401).send({
+      message: "Unauthorized Access",
+      err,
+    });
+  }
+};
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@clustermyfirstmongodbpr.2cecfoe.mongodb.net/?appName=ClusterMyFirstMongoDbProject`;
 const client = new MongoClient(uri, {
@@ -122,21 +152,19 @@ async function run() {
 
       const seccions = await stripe.checkout.sessions.retrieve(data);
       if (seccions.payment_status) {
-         
         const trakingId = generateTrackingId();
 
-        // No Repet Saved Database Chack 
+        // No Repet Saved Database Chack
         const transactionId = seccions.payment_intent;
-        const query2 = {transactionId : transactionId};
+        const query2 = { transactionId: transactionId };
         const isExgisted = await paymentParcelCollection.findOne(query2);
-        if(isExgisted){
+        if (isExgisted) {
           return res.send({
-            message:"Is Exgisted Payment Data",
+            message: "Is Exgisted Payment Data",
             transactionId,
-            trakingId:isExgisted.trakingId
-          })
+            trakingId: isExgisted.trakingId,
+          });
         }
-
 
         const id = seccions.metadata.parcelid;
         const query = { _id: new ObjectId(id) };
@@ -148,8 +176,6 @@ async function run() {
         };
         const result = await parcelCollection.updateOne(query, seter);
 
-
-        
         const paymentInfo = {
           amount: seccions.amount_total / 100,
           currency: seccions.currency,
@@ -159,7 +185,7 @@ async function run() {
           transactionId: seccions.payment_intent,
           paymentStatus: seccions.payment_status,
           paidAt: new Date(),
-          trakingId:trakingId,
+          trakingId: trakingId,
         };
         // console.log("New", paymentInfo);
 
@@ -171,28 +197,30 @@ async function run() {
             modifyParcel: result,
             paymentInfo: resultPayment,
             trakingId: trakingId,
-            transactionId:seccions.payment_intent,
+            transactionId: seccions.payment_intent,
             success: true,
           });
         }
       }
-
     });
 
     // get payment data user
-    app.get("/payment", async (req, res) => {
-      const {email} = req.query;
-      const query = {}
-      if(email){
-        query.customerEmail === email
+    app.get("/payment", vreifyFirebase, async (req, res) => {
+      const { email } = req.query;
+      const query = {};
+      if (email) {
+        query.customerEmail = email;
+        if (email !== req.verify_email) {
+          return res.status(403).send({
+            message: "Forbident Access",
+          });
+        }
       }
 
-      const data =  paymentParcelCollection.find(query);
+      const data = paymentParcelCollection.find(query).sort({ paidAt: -1 });
       const result = await data.toArray();
       res.send(result);
-    })
-
-
+    });
 
     //Old Payment Api
     app.post("/checkout", async (req, res) => {
