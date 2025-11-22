@@ -31,7 +31,7 @@ admin.initializeApp({
 
 const vreifyFirebase = async (req, res, next) => {
   const token = req.headers.authorization;
-  console.log(token);
+  // console.log(token);
   if (!token) {
     return res.status(401).send({
       message: "Unauthorized Access",
@@ -67,17 +67,21 @@ async function run() {
     const parcelCollection = parcelDB.collection("allparcel");
     const userCollection = parcelDB.collection("user");
     const paymentParcelCollection = parcelDB.collection("paymentParcel");
-
+    const riderCollection = parcelDB.collection("rider");
     // User Roll
     app.post("/svuser", async (req, res) => {
       const user = req.body;
+      console.log(user);
+
       user.role = "user";
       user.creatWb = new Date();
 
+      const chack = user.email;
+
       // chack user allready saved naki
-      const userIsExiet = await userCollection.findOne(user.email);
+      const userIsExiet = await userCollection.findOne({ chack });
       if (userIsExiet) {
-        return res.json({message: "User Allready Saved"});
+        return res.json({ message: "User Allready Saved" });
       }
       const result = await userCollection.insertOne(user);
       res.send(result);
@@ -267,6 +271,58 @@ async function run() {
 
       res.send({ url: session.url });
     });
+
+    // Rider Roll
+    app.post("/rider", async (req, res) => {
+      const rider = req.body;
+
+      (rider.status = "pending"),
+        (rider.creatAtime = new Date()),
+        (rider.roll = "Rider");
+      console.log(rider);
+
+      const result = await riderCollection.insertOne(rider);
+      res.status(200).send({ message: "Saved Creat Rider Data", result });
+    });
+
+    app.get("/riders", async (req, res) => {
+      const query = {};
+      if (req.query.status) {
+        query.status = req.query.status;
+      }
+      const cursor = riderCollection.find(query).sort({ creatAtime: -1 });
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.patch("/riderUb/:id", vreifyFirebase, async (req, res) => {
+      const status = req.body.status;
+      console.log(status);
+
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const seter = {
+        $set: {
+          status: status,
+        },
+      };
+      const result = await riderCollection.updateOne(query, seter);
+
+      if (status == "approved") {
+        const email = req.body.email;
+        const queryUser = { email };
+        const seter2 = {
+          $set: {
+            role: "Rider",
+          },
+        };
+
+        const result2 = await userCollection.updateOne(queryUser, seter2);
+
+      }
+      res.send(result);
+    });
+
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
