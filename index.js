@@ -65,7 +65,23 @@ async function run() {
   try {
     const parcelDB = client.db("parcelDB");
     const parcelCollection = parcelDB.collection("allparcel");
+    const userCollection = parcelDB.collection("user");
     const paymentParcelCollection = parcelDB.collection("paymentParcel");
+
+    // User Roll
+    app.post("/svuser", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.creatWb = new Date();
+
+      // chack user allready saved naki
+      const userIsExiet = await userCollection.findOne(user.email);
+      if (userIsExiet) {
+        return res.json({message: "User Allready Saved"});
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
 
     //  All parcel API
     app.get("/parcel", async (req, res) => {
