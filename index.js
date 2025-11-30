@@ -76,7 +76,7 @@ async function run() {
       const query = { email };
       const user = await userCollection.findOne(query);
 
-      if (!user || user.role === "admin") {
+      if (!user || user.role !== "admin") {
         return res.status(403).send({ message: "Forbitien Access" });
       }
       next();
@@ -149,6 +149,14 @@ async function run() {
       }
     );
 
+    app.delete("/user/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+    });
+
     //  All parcel API
     app.get("/parcel", async (req, res) => {
       const query = {};
@@ -192,36 +200,37 @@ async function run() {
         result,
       });
     });
-   
 
-    app.patch("/parcel/:id", async (req,res) => {
+    app.patch("/parcel/:id", async (req, res) => {
       const id = req.params.id;
-      const {riderId, riderEmail,riderName} = req.body;
-      const newIdTest = {_id: new ObjectId(id)};
+      const { riderId, riderEmail, riderName } = req.body;
+      const newIdTest = { _id: new ObjectId(id) };
       const updeatDocParcel = {
-        $set:{
-          deliveryStatus:'driver-assigned',
-          riderId:riderId,
-          riderEmail:riderEmail,
-          riderName:riderName
-        }
-      }
-      const parcelResult = await parcelCollection.updateOne(newIdTest, updeatDocParcel);
-       
+        $set: {
+          deliveryStatus: "driver-assigned",
+          riderId: riderId,
+          riderEmail: riderEmail,
+          riderName: riderName,
+        },
+      };
+      const parcelResult = await parcelCollection.updateOne(
+        newIdTest,
+        updeatDocParcel
+      );
 
-      // Updeat Rider 
+      // Updeat Rider
 
-      const id2 = {_id: new ObjectId(riderId)};
+      const id2 = { _id: new ObjectId(riderId) };
       const updeatDocRider = {
-        $set:{
-          workStatus:"in-delivery",
-        }
-      }
+        $set: {
+          workStatus: "in-delivery",
+        },
+      };
 
       const resultRider = await riderCollection.updateOne(id2, updeatDocRider);
 
-      res.send(parcelResult,resultRider)
-    })
+      res.send(parcelResult, resultRider);
+    });
 
     app.delete("/parcel/:id", async (req, res) => {
       const id = req.params.id;
@@ -409,8 +418,6 @@ async function run() {
       const result = await riderCollection.find(query).toArray();
       res.send(result);
     });
-
-
 
     app.patch("/riderUb/:id", vreifyFirebase, verifyAdmin, async (req, res) => {
       const status = req.body.status;
