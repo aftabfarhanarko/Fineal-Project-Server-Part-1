@@ -100,26 +100,24 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users", async (req, res) => {
-      try {
-        const result = await userCollection
-          .aggregate([
-            {
-              $group: {
-                _id: "$email",
-                doc: { $first: "$$ROOT" },
-              },
-            },
-            {
-              $replaceRoot: { newRoot: "$doc" },
-            },
-          ])
-          .toArray();
+    app.get("/users", vreifyFirebase, async (req, res) => {
+      const searchText = req.query.searchText;
+      console.log(searchText);
 
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ message: "Server Error", error });
+      const query = {};
+      if (searchText) {
+        // single search text
+        // query.displayName = { $regex: searchText, $options: "i" };
+
+        // Double SearchText
+        query.$or = [
+          { displayName: { $regex: searchText, $options: "i" } },
+          { email: { $regex: searchText, $options: "i" } },
+        ];
       }
+
+      const result = await userCollection.find(query).toArray();
+      res.send(result);
     });
 
     app.get("/users/:id", async (req, res) => {});
@@ -155,10 +153,15 @@ async function run() {
     app.get("/parcel", async (req, res) => {
       const query = {};
 
-      const { email } = req.query;
+      const { email,deliveryStatus } = req.query;
+      console.log(deliveryStatus);
+      
 
       if (email) {
         query.senderemail = email;
+      }
+      if(deliveryStatus){
+        query.deliveryStatus = deliveryStatus
       }
       const options = { sort: { creatAtime: -1 } };
 
@@ -255,6 +258,7 @@ async function run() {
         const seter = {
           $set: {
             paymentStutas: "Paid",
+            deliveryStatus: "pending-pickup",
             trakingId: trakingId,
           },
         };
@@ -368,6 +372,7 @@ async function run() {
       const seter = {
         $set: {
           status: status,
+          workStatus: 'available'
         },
       };
       const result = await riderCollection.updateOne(query, seter);
