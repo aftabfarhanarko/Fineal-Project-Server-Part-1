@@ -87,6 +87,11 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/users", async (req,res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result)
+    })
+
     //  All parcel API
     app.get("/parcel", async (req, res) => {
       const query = {};
