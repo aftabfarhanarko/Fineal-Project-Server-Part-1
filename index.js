@@ -153,15 +153,14 @@ async function run() {
     app.get("/parcel", async (req, res) => {
       const query = {};
 
-      const { email,deliveryStatus } = req.query;
+      const { email, deliveryStatus } = req.query;
       console.log(deliveryStatus);
-      
 
       if (email) {
         query.senderemail = email;
       }
-      if(deliveryStatus){
-        query.deliveryStatus = deliveryStatus
+      if (deliveryStatus) {
+        query.deliveryStatus = deliveryStatus;
       }
       const options = { sort: { creatAtime: -1 } };
 
@@ -193,6 +192,36 @@ async function run() {
         result,
       });
     });
+   
+
+    app.patch("/parcel/:id", async (req,res) => {
+      const id = req.params.id;
+      const {riderId, riderEmail,riderName} = req.body;
+      const newIdTest = {_id: new ObjectId(id)};
+      const updeatDocParcel = {
+        $set:{
+          deliveryStatus:'driver-assigned',
+          riderId:riderId,
+          riderEmail:riderEmail,
+          riderName:riderName
+        }
+      }
+      const parcelResult = await parcelCollection.updateOne(newIdTest, updeatDocParcel);
+       
+
+      // Updeat Rider 
+
+      const id2 = {_id: new ObjectId(riderId)};
+      const updeatDocRider = {
+        $set:{
+          workStatus:"in-delivery",
+        }
+      }
+
+      const resultRider = await riderCollection.updateOne(id2, updeatDocRider);
+
+      res.send(parcelResult,resultRider)
+    })
 
     app.delete("/parcel/:id", async (req, res) => {
       const id = req.params.id;
@@ -354,14 +383,34 @@ async function run() {
     });
 
     app.get("/riders", async (req, res) => {
+      const { status } = req.query;
+
       const query = {};
-      if (req.query.status) {
+      if (status) {
         query.status = req.query.status;
       }
+
       const cursor = riderCollection.find(query).sort({ creatAtime: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    app.get("/ridereas", async (req, res) => {
+      const { yourDistrict, workStatus } = req.query;
+      console.log(yourDistrict, workStatus);
+      const query = {};
+      if (yourDistrict) {
+        query.yourDistrict = yourDistrict;
+      }
+
+      if (workStatus) {
+        query.workStatus = workStatus;
+      }
+      const result = await riderCollection.find(query).toArray();
+      res.send(result);
+    });
+
+
 
     app.patch("/riderUb/:id", vreifyFirebase, verifyAdmin, async (req, res) => {
       const status = req.body.status;
@@ -372,7 +421,7 @@ async function run() {
       const seter = {
         $set: {
           status: status,
-          workStatus: 'available'
+          workStatus: "available",
         },
       };
       const result = await riderCollection.updateOne(query, seter);
