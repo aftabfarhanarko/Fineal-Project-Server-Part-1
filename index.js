@@ -68,29 +68,88 @@ async function run() {
     const userCollection = parcelDB.collection("user");
     const paymentParcelCollection = parcelDB.collection("paymentParcel");
     const riderCollection = parcelDB.collection("rider");
+
+    // middle admin before allowing admin activity
+    // must be used after verifyFBToken middleware
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.verify_email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+
+      if (!user || user.role === "admin") {
+        return res.status(403).send({ message: "Forbitien Access" });
+      }
+      next();
+    };
+
     // User Roll
     app.post("/svuser", async (req, res) => {
       const user = req.body;
-      console.log(user);
 
       user.role = "user";
       user.creatWb = new Date();
 
-      const chack = user.email;
+      // Check if email already exists
+      const userIsExist = await userCollection.findOne({ email: user?.email });
 
-      // chack user allready saved naki
-      const userIsExiet = await userCollection.findOne({ chack });
-      if (userIsExiet) {
-        return res.json({ message: "User Allready Saved" });
+      if (userIsExist) {
+        return res.json({ message: "User Already Saved" });
       }
+
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
 
-    app.get("/users", async (req,res) => {
-      const result = await userCollection.find().toArray();
-      res.send(result)
-    })
+    app.get("/users", async (req, res) => {
+      try {
+        const result = await userCollection
+          .aggregate([
+            {
+              $group: {
+                _id: "$email",
+                doc: { $first: "$$ROOT" },
+              },
+            },
+            {
+              $replaceRoot: { newRoot: "$doc" },
+            },
+          ])
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Server Error", error });
+      }
+    });
+
+    app.get("/users/:id", async (req, res) => {});
+
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req?.params?.email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+      res.send({ role: user?.role || "user" });
+    });
+
+    app.patch(
+      "/users/:id/role",
+      vreifyFirebase,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const data = req?.body;
+        console.log(id, data);
+
+        const updeatDoc = {
+          $set: {
+            role: data?.role,
+          },
+        };
+        const result = await userCollection.updateOne(query, updeatDoc);
+        res.send(result);
+      }
+    );
 
     //  All parcel API
     app.get("/parcel", async (req, res) => {
@@ -300,7 +359,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/riderUb/:id", vreifyFirebase, async (req, res) => {
+    app.patch("/riderUb/:id", vreifyFirebase, verifyAdmin, async (req, res) => {
       const status = req.body.status;
       console.log(status);
 
@@ -323,7 +382,6 @@ async function run() {
         };
 
         const result2 = await userCollection.updateOne(queryUser, seter2);
-
       }
       res.send(result);
     });
