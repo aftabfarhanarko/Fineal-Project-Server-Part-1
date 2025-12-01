@@ -148,7 +148,7 @@ async function run() {
 
     app.get("/users", async (req, res) => {
       const { limit, skip } = req.query;
-      console.log(limit,skip);
+      console.log(limit, skip);
 
       const searchText = req.query.searchText;
       console.log(searchText);
@@ -164,13 +164,14 @@ async function run() {
         ];
       }
 
-      const result = await userCollection.find(query)
-      .limit(Number(limit))
-      .skip(Number(skip))
-      .toArray();
+      const result = await userCollection
+        .find(query)
+        .limit(Number(limit))
+        .skip(Number(skip))
+        .toArray();
 
       const count = await userCollection.countDocuments();
-      res.send({result, total:count});
+      res.send({ result, total: count });
     });
 
     app.get("/users/:email/role", async (req, res) => {
@@ -212,7 +213,7 @@ async function run() {
     app.get("/parcel", async (req, res) => {
       const query = {};
 
-      const { email, deliveryStatus } = req.query;
+      const { email, deliveryStatus, limit, skip } = req.query;
       console.log(deliveryStatus);
 
       if (email) {
@@ -477,19 +478,20 @@ async function run() {
     });
 
     app.get("/riders", async (req, res) => {
-      const { status,limit, skip } = req.query;
+      const { status, limit, skip } = req.query;
       const query = {};
       if (status) {
         query.status = req.query.status;
       }
 
-      const cursor = riderCollection.find(query)
-      .limit(Number(limit))
-      .skip(Number(skip))
-      .sort({ creatAtime: -1 });
+      const cursor = riderCollection
+        .find(query)
+        .limit(Number(limit))
+        .skip(Number(skip))
+        .sort({ creatAtime: -1 });
       const result = await cursor.toArray();
       const total = await riderCollection.countDocuments();
-      res.send({result , total:total});
+      res.send({ result, total: total });
     });
 
     app.get("/ridereas", async (req, res) => {
@@ -503,7 +505,9 @@ async function run() {
       if (workStatus) {
         query.workStatus = workStatus;
       }
-      const result = await riderCollection.find(query).toArray();
+      const result = await riderCollection
+        .find(query)
+        .toArray();
       res.send(result);
     });
 
