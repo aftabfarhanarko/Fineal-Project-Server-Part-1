@@ -263,7 +263,7 @@ async function run() {
       parcel.creatAtime = new Date();
       parcel.trakingId = trakingId;
 
-      logTrakingId(trakingId, "parcel-creat")
+      logTrakingId(trakingId, "parcel-creat");
 
       const result = await parcelCollection.insertOne(parcel);
       res.status(200).json({
@@ -363,6 +363,8 @@ async function run() {
         metadata: {
           parcelid: paymentInfo?.parcelid,
           percilname: paymentInfo?.percilname,
+          trakingId: paymentInfo?.trakingId,
+          amount: amount,
         },
         customer_email: paymentInfo?.senderemail,
         success_url: `${process.env.YOUR_DOMAIN}/dasbord/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -377,7 +379,8 @@ async function run() {
 
       const seccions = await stripe.checkout.sessions.retrieve(data);
       if (seccions.payment_status) {
-        const trakingId = generateTrackingId();
+        // use the previous tracking id created during the parcel create which was set to the session metadata during session creation
+        const trakingId = seccions.metadata.trakingId;
 
         // No Repet Saved Database Chack
         const transactionId = seccions.payment_intent;
@@ -397,7 +400,7 @@ async function run() {
           $set: {
             paymentStutas: "Paid",
             deliveryStatus: "pending-pickup",
-            trakingId: trakingId,
+            // trakingId: trakingId,
           },
         };
         const result = await parcelCollection.updateOne(query, seter);
@@ -420,11 +423,17 @@ async function run() {
             paymentInfo
           );
           logTrakingId(trakingId, "pending-pickup");
+
           res.send({
             modifyParcel: result,
             paymentInfo: resultPayment,
             trakingId: trakingId,
             transactionId: seccions.payment_intent,
+
+            // ⭐ ADD THESE FIELDS ⭐
+            amount: seccions.amount_total / 100,
+            email: seccions.customer_email,
+            method: seccions.payment_method_types?.[0] || "card",
             success: true,
           });
         }
