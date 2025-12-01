@@ -68,6 +68,18 @@ async function run() {
     const userCollection = parcelDB.collection("user");
     const paymentParcelCollection = parcelDB.collection("paymentParcel");
     const riderCollection = parcelDB.collection("rider");
+    const trakingCollection = parcelDB.collection("tracked");
+
+    const logTrakingId = async (trakingId, status) => {
+      const log = {
+        trakingId,
+        status,
+        detlis: status.split("-").join(" "),
+        crearAt: new Date(),
+      };
+      const result = await trakingCollection.insertOne(log);
+      return result;
+    };
 
     // middle admin before allowing admin activity
     // must be used after verifyFBToken middleware
@@ -81,6 +93,15 @@ async function run() {
       }
       next();
     };
+
+    // Traking Collections
+
+    app.get("/traking/:trakingId", async (req, res) => {
+      const trakingId = req.params.trakingId;
+      const query = { trakingId };
+      const result = await trakingCollection.find(query).toArray();
+      res.send(result);
+    });
 
     // User Roll
     app.post("/svuser", async (req, res) => {
@@ -211,9 +232,11 @@ async function run() {
       if (riderEmail) {
         query.riderEmail = riderEmail;
       }
-      if (deliveryStatus) {
+      if (deliveryStatus !== "parcel-delivered") {
         // query.deliveryStatus = {$in: ["driver-assigned","rider-arriving"]};
         query.deliveryStatus = { $nin: ["parcel-delivered"] };
+      } else {
+        query.deliveryStatus = deliveryStatus;
       }
 
       console.log(riderEmail, deliveryStatus);
@@ -236,7 +259,11 @@ async function run() {
     app.post("/parcel", async (req, res) => {
       const parcel = req.body;
       // creat a parcel Time
+      const trakingId = generateTrackingId();
       parcel.creatAtime = new Date();
+      parcel.trakingId = trakingId;
+
+      logTrakingId(trakingId, "parcel-creat")
 
       const result = await parcelCollection.insertOne(parcel);
       res.status(200).json({
@@ -247,7 +274,7 @@ async function run() {
 
     app.patch("/parcel/:id", async (req, res) => {
       const id = req.params.id;
-      const { riderId, riderEmail, riderName } = req.body;
+      const { riderId, riderEmail, riderName, trakingId } = req.body;
       const newIdTest = { _id: new ObjectId(id) };
       const updeatDocParcel = {
         $set: {
@@ -273,11 +300,13 @@ async function run() {
 
       const resultRider = await riderCollection.updateOne(id2, updeatDocRider);
 
+      // Log
+      logTrakingId(trakingId, "driver-assigned");
       res.send(parcelResult, resultRider);
     });
 
     app.patch("/parcel/:id/status", async (req, res) => {
-      const { deliveryStatus } = req.body;
+      const { deliveryStatus, riderId, trakingId } = req.body;
       const id = req.params.id;
       const ub = { _id: new ObjectId(id) };
       const seter = {
@@ -285,7 +314,20 @@ async function run() {
           deliveryStatus: deliveryStatus,
         },
       };
+
+      if (deliveryStatus === "parcel-delivered") {
+        const newId = { _id: new ObjectId(riderId) };
+        const updeatDoc = {
+          $set: {
+            workStatus: "available",
+          },
+        };
+        const result2 = await riderCollection.updateOne(newId, updeatDoc);
+      }
       const result = await parcelCollection.updateOne(ub, seter);
+      // log
+
+      logTrakingId(trakingId, deliveryStatus);
       res.send(result);
       console.log(deliveryStatus);
     });
@@ -377,6 +419,7 @@ async function run() {
           const resultPayment = await paymentParcelCollection.insertOne(
             paymentInfo
           );
+          logTrakingId(trakingId, "pending-pickup");
           res.send({
             modifyParcel: result,
             paymentInfo: resultPayment,
@@ -404,36 +447,6 @@ async function run() {
       const data = paymentParcelCollection.find(query).sort({ paidAt: -1 });
       const result = await data.toArray();
       res.send(result);
-    });
-
-    //Old Payment Api
-    app.post("/checkout", async (req, res) => {
-      const paymentInfo = req.body;
-      const amount = paymentInfo?.totalCost * 100;
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            price_data: {
-              currency: "USD",
-              unit_amount: amount,
-              product_data: {
-                name: `Please Pay For : ${paymentInfo?.percilname}`,
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        customer_email: paymentInfo?.senderemail,
-        mode: "payment",
-        metadata: {
-          parcelid: paymentInfo?.parcelid,
-          parcelName: paymentInfo?.percilname,
-        },
-        success_url: `${process.env.YOUR_DOMAIN}/dasbord/success`,
-        cancel_url: `${process.env.YOUR_DOMAIN}/dasbord/cancel`,
-      });
-
-      res.send({ url: session.url });
     });
 
     // Rider Roll
