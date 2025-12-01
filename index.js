@@ -99,6 +99,31 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+    // mohiuddine@gmail.comAAs@@12
+    app.patch("/user/riderUpdet", async (req, res) => {
+      const { email } = req.query;
+      const { riderInfoUb } = req.body;
+
+      if (!email) {
+        return res.status(400).send({ message: "Email missing" });
+      }
+
+      const seter = {
+        $set: {
+          role: riderInfoUb.role,
+        },
+      };
+
+      console.log("EMAIL:", email);
+      console.log("NEW ROLE:", riderInfoUb.role);
+
+      const result = await userCollection.updateOne(
+        { email: email }, // <-- MUST BE AN OBJECT
+        seter
+      );
+
+      res.send(result);
+    });
 
     app.get("/users", vreifyFirebase, async (req, res) => {
       const searchText = req.query.searchText;
@@ -178,6 +203,25 @@ async function run() {
         result,
       });
     });
+
+    app.get("/parcel/rider", async (req, res) => {
+      // parcel/rider?riderEmail=${user.email}&deliveryStatus=driver-assigned
+      const { riderEmail, deliveryStatus } = req.query;
+      const query = {};
+      if (riderEmail) {
+        query.riderEmail = riderEmail;
+      }
+      if (deliveryStatus) {
+        // query.deliveryStatus = {$in: ["driver-assigned","rider-arriving"]};
+        query.deliveryStatus = { $nin: ["parcel-delivered"] };
+      }
+
+      console.log(riderEmail, deliveryStatus);
+
+      const coursor = parcelCollection.find(query);
+      const result = await coursor.toArray();
+      res.send(result);
+    });
     // data
     app.get("/parcel/:id", async (req, res) => {
       const id = req.params.id;
@@ -230,6 +274,20 @@ async function run() {
       const resultRider = await riderCollection.updateOne(id2, updeatDocRider);
 
       res.send(parcelResult, resultRider);
+    });
+
+    app.patch("/parcel/:id/status", async (req, res) => {
+      const { deliveryStatus } = req.body;
+      const id = req.params.id;
+      const ub = { _id: new ObjectId(id) };
+      const seter = {
+        $set: {
+          deliveryStatus: deliveryStatus,
+        },
+      };
+      const result = await parcelCollection.updateOne(ub, seter);
+      res.send(result);
+      console.log(deliveryStatus);
     });
 
     app.delete("/parcel/:id", async (req, res) => {
