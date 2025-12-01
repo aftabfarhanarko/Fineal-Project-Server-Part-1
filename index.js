@@ -146,7 +146,10 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users", vreifyFirebase, async (req, res) => {
+    app.get("/users", async (req, res) => {
+      const { limit, skip } = req.query;
+      console.log(limit,skip);
+
       const searchText = req.query.searchText;
       console.log(searchText);
 
@@ -154,7 +157,6 @@ async function run() {
       if (searchText) {
         // single search text
         // query.displayName = { $regex: searchText, $options: "i" };
-
         // Double SearchText
         query.$or = [
           { displayName: { $regex: searchText, $options: "i" } },
@@ -162,11 +164,14 @@ async function run() {
         ];
       }
 
-      const result = await userCollection.find(query).toArray();
-      res.send(result);
-    });
+      const result = await userCollection.find(query)
+      .limit(Number(limit))
+      .skip(Number(skip))
+      .toArray();
 
-    app.get("/users/:id", async (req, res) => {});
+      const count = await userCollection.countDocuments();
+      res.send({result, total:count});
+    });
 
     app.get("/users/:email/role", async (req, res) => {
       const email = req?.params?.email;
@@ -472,16 +477,19 @@ async function run() {
     });
 
     app.get("/riders", async (req, res) => {
-      const { status } = req.query;
-
+      const { status,limit, skip } = req.query;
       const query = {};
       if (status) {
         query.status = req.query.status;
       }
 
-      const cursor = riderCollection.find(query).sort({ creatAtime: -1 });
+      const cursor = riderCollection.find(query)
+      .limit(Number(limit))
+      .skip(Number(skip))
+      .sort({ creatAtime: -1 });
       const result = await cursor.toArray();
-      res.send(result);
+      const total = await riderCollection.countDocuments();
+      res.send({result , total:total});
     });
 
     app.get("/ridereas", async (req, res) => {
