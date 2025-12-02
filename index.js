@@ -9,6 +9,7 @@ dotenv.config();
 const serviceAccount = "./firebase-adminSdk.json";
 // import jwt from "jsonwebtoken";
 import Stripe from "stripe";
+import { count } from "console";
 const stripe = new Stripe(process.env.PAYMENT_KEY);
 const app = express();
 const port = process.env.PORT;
@@ -89,6 +90,17 @@ async function run() {
       const user = await userCollection.findOne(query);
 
       if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "Forbitien Access" });
+      }
+      next();
+    };
+
+    const verifyRider = async (req, res, next) => {
+      const email = req.verify_email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+
+      if (!user || user.role !== "rider") {
         return res.status(403).send({ message: "Forbitien Access" });
       }
       next();
@@ -348,6 +360,30 @@ async function run() {
       });
     });
 
+    app.get(
+      "/parcel/deliveryStatus/same",
+      vreifyFirebase,
+      verifyAdmin,
+      async (req, res) => {
+        const pipeline = [
+          {
+            $group: {
+              _id: "$deliveryStatus",
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $project: {
+              status: "$_id",
+              count: 1,
+            },
+          },
+        ];
+        const result = await parcelCollection.aggregate(pipeline).toArray();
+        res.send(result);
+      }
+    );
+
     // New Payment
     app.post("/payment-checkout", async (req, res) => {
       const paymentInfo = req.body;
@@ -356,7 +392,7 @@ async function run() {
         line_items: [
           {
             price_data: {
-              currency: "USD",
+              currency: "usd",
               unit_amount: amount,
               product_data: {
                 name: `Pay For Parcel  Name : ${paymentInfo?.percilname}`,
@@ -477,7 +513,7 @@ async function run() {
       res.status(200).send({ message: "Saved Creat Rider Data", result });
     });
 
-    app.get("/riders", async (req, res) => {
+    app.get("/riders", vreifyFirebase, async (req, res) => {
       const { status, limit, skip } = req.query;
       const query = {};
       if (status) {
@@ -505,9 +541,61 @@ async function run() {
       if (workStatus) {
         query.workStatus = workStatus;
       }
-      const result = await riderCollection
-        .find(query)
-        .toArray();
+      const result = await riderCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // pipline aggerate
+    app.get("/ridersar/delivery-per-day", async (req, res) => {
+      const email = req.query.email;
+      console.log(email);
+
+      const pipeline = [
+        {
+          $match: {
+            riderEmail: email,
+            deliveryStatus: "parcel-delivered",
+          },
+        },
+        {
+          $lookup: {
+            from: "tracked",
+            localField: "trakingId",
+            foreignField: "trakingId",
+            as: "parcel-trackings",
+          },
+        },
+        {
+          $unwind: "$parcel-trackings",
+        },
+        {
+          $match: {
+            "parcel-trackings.status": "parcel-delivered",
+          },
+        },
+        {
+          // convert timestamp to YYYY-MM-DD string
+          $addFields: {
+            deliveryDay: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$parcel-trackings.crearAt",
+              },
+            },
+          },
+        },
+        {
+          // group by date
+          $group: {
+            _id: "$deliveryDay",
+            deliveredCount: { $sum: 1 },
+          },
+        },
+      ];
+
+      const result = await parcelCollection.aggregate(pipeline).toArray();
+      // console.log(result);
+
       res.send(result);
     });
 
