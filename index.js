@@ -274,6 +274,24 @@ async function run() {
       });
     });
 
+    app.get("/totaluser/parcel", async (req,res) => {
+      const email = req.query.email;
+      const query ={senderemail:email};
+      const result = await parcelCollection.find(query).toArray();
+      console.log(email, result);
+      
+      res.send(result)
+    })
+     
+    app.get("/totalDelivery/deliveryStatus", async (req,res) => {
+      const delivery = req.query.deliveryStatus;
+      const email = req.query.email;
+      const query={deliveryStatus: delivery,senderemail:email };
+      const result = await parcelCollection.find(query).toArray();
+      console.log(delivery, result);
+      res.send(result);
+      
+    })
     app.post("/parcel", async (req, res) => {
       const parcel = req.body;
       // creat a parcel Time
