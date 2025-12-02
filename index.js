@@ -6,11 +6,16 @@ import cors from "cors";
 import admin from "firebase-admin";
 import crypto from "crypto";
 dotenv.config();
-const serviceAccount = "./firebase-adminSdk.json";
 // import jwt from "jsonwebtoken";
 import Stripe from "stripe";
 import { count } from "console";
 const stripe = new Stripe(process.env.PAYMENT_KEY);
+
+// const serviceAccount = require("./firebase-admin-key.json");
+const decoded = Buffer.from(process.env.NEW_FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 const app = express();
 const port = process.env.PORT;
 
@@ -274,24 +279,23 @@ async function run() {
       });
     });
 
-    app.get("/totaluser/parcel", async (req,res) => {
+    app.get("/totaluser/parcel", async (req, res) => {
       const email = req.query.email;
-      const query ={senderemail:email};
+      const query = { senderemail: email };
       const result = await parcelCollection.find(query).toArray();
       console.log(email, result);
-      
-      res.send(result)
-    })
-     
-    app.get("/totalDelivery/deliveryStatus", async (req,res) => {
+
+      res.send(result);
+    });
+
+    app.get("/totalDelivery/deliveryStatus", async (req, res) => {
       const delivery = req.query.deliveryStatus;
       const email = req.query.email;
-      const query={deliveryStatus: delivery,senderemail:email };
+      const query = { deliveryStatus: delivery, senderemail: email };
       const result = await parcelCollection.find(query).toArray();
       console.log(delivery, result);
       res.send(result);
-      
-    })
+    });
     app.post("/parcel", async (req, res) => {
       const parcel = req.body;
       // creat a parcel Time
